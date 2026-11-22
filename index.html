@@ -213,10 +213,6 @@ summary::before{
 details[open] > summary::before{transform:rotate(90deg)}
 details p,details li{font-size:.95rem}
 details > div,details > p{margin-bottom:12px}
-.lab{font-weight:800;margin-top:6px}
-.help-grid{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 12px}
-.help-grid button{font-size:1.05rem;padding:4px 12px}
-.help-grid small{color:var(--muted);margin-left:6px;font-weight:400}
 .recrow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 0;border-top:2px dashed var(--edge)}
 .recrow:first-of-type{border-top:0}
 .recrow .c{font-size:1.6rem;min-width:1.6em;font-weight:900;color:var(--accent)}
@@ -306,17 +302,6 @@ details > div,details > p{margin-bottom:12px}
     </div>
     <p class="note">音高倍率是在所选音色的基准音高上再乘的倍率，右边显示的是实际音高。</p>
   </section>
-
-  <details id="help" class="card">
-    <summary><span class="tag">HELP // 说明</span>五个字和五种声调</summary>
-    <p>邦布语只表达语气和声音。原话藏在邦布语后面看不见的字符里，所以只有翻译器生成、并且完整复制下来的邦布语才能还原成人话；有些聊天软件会过滤这些字符，遇到这种情况可以勾选“同时显示括号里的原文”；手打的邦布语只能读出语气。点下面的按钮可以试听。</p>
-    <div class="lab">五个字</div>
-    <div id="helpChars" class="help-grid"></div>
-    <div class="lab">五种声调（以“呐”为例）</div>
-    <div id="helpTones" class="help-grid"></div>
-    <p>造句规则：词 = 一个以上起头字（嗯、咦、哇）+ 一个以上收尾字（呐、哒），“哒”只出现在词的最后；一句话由一到三个词连写。疑问句会以“咦”开头、末字二声，感叹句偏一声和四声，低落的句子用重复的“嗯”。</p>
-    <p>长短音：重复的字是断奏；“哒”短促；句末“～”拖长并带明显的颤；句末“？”上扬并拉长；“！”整体短促有力；“……”越说越慢、越小声。音节条里小块越宽，念得越长。</p>
-  </details>
 
   <details id="rec" class="card">
     <summary><span class="tag">REC // 录音</span>录制我的邦布音</summary>
@@ -1136,7 +1121,7 @@ details > div,details > p{margin-bottom:12px}
     }
   }
 
-  // 单个字试听(说明区、音节条小块、录音试听共用)
+  // 单个字试听(音节条小块、录音试听共用)
   function playOne(ch, tone, item, chipIdx) {
     stopAll();
     try { ensureCtx(); } catch (e) { say('这个浏览器不能播放声音。'); return; }
@@ -1407,29 +1392,6 @@ details > div,details > p{margin-bottom:12px}
     });
   }
 
-  // ================= 说明区 =================
-  function buildHelp() {
-    var chars = [
-      ['嗯', '起头字，鼻音哼声'], ['咦', '起头字，尖尖的“i”'], ['哇', '起头字，从“u”滑到“a”'],
-      ['呐', '收尾字，带点鼻音的“a”'], ['哒', '收尾字，只放在词尾，带爆破']
-    ];
-    var hc = $('helpChars');
-    chars.forEach(function (c) {
-      var b = el('button', null, c[0]); b.type = 'button';
-      b.appendChild(el('small', null, c[1]));
-      b.addEventListener('click', function () { playOne(c[0], 1, null, null); });
-      hc.appendChild(b);
-    });
-    var tones = [[1, '一声 高平'], [2, '二声 上扬'], [3, '三声 先降后升'], [4, '四声 下降'], [0, '轻声 短促']];
-    var ht = $('helpTones');
-    tones.forEach(function (t) {
-      var b = el('button', null, '呐' + B.TONE_CH[t[0]]); b.type = 'button';
-      b.appendChild(el('small', null, t[1]));
-      b.addEventListener('click', function () { playOne('呐', t[0], null, null); });
-      ht.appendChild(b);
-    });
-  }
-
   // ================= 初始化 =================
   function init() {
     PRESET_ORDER.forEach(function (k) {
@@ -1438,7 +1400,7 @@ details > div,details > p{margin-bottom:12px}
       els.preset.appendChild(o);
     });
     loadSettings(); syncSliders();
-    buildHelp(); buildRec(); refreshRec();
+    buildRec(); refreshRec();
     els.preset.addEventListener('change', function () {
       if (PRESETS[els.preset.value]) S.presetName = els.preset.value;
       syncSliders(); saveSettings();
