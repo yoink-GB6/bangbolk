@@ -1,0 +1,1479 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>邦布语翻译器</title>
+<meta name="description" content="人话和邦布语互相翻译的小工具：每个字带声调，原话藏在看不见的字符里，还能念出声来。单文件、离线可用，非官方同人作品。">
+<meta name="theme-color" content="#101012" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f2efe6" media="(prefers-color-scheme: light)">
+<meta property="og:type" content="website">
+<meta property="og:title" content="邦布语翻译器">
+<meta property="og:description" content="人话和邦布语互相翻译的小工具：每个字带声调，原话藏在看不见的字符里，还能念出声来。非官方同人作品。">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<style>
+:root{
+  --bg:#101012; --card:#1d1d22; --card2:#2b2b32; --field:#141418; --ink:#f3eedd; --muted:#aaa699;
+  --edge:#6f6e78; --edge-strong:#f3eedd; --shade:#000000; --accent:#ffd400; --hot:#ff5a1f; --hot-text:#ff8a55;
+  --dot:rgba(255,255,255,.07); --focus:#ffd400; --m-edge:#f3eedd; --band:rgba(255,212,0,.10);
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme:light){
+  :root{
+    --bg:#f2efe6; --card:#fffdf6; --card2:#e9e4d2; --field:#ffffff; --ink:#111111; --muted:#55524a;
+    --edge:#111111; --edge-strong:#111111; --shade:#111111; --hot-text:#b3350a;
+    --dot:rgba(0,0,0,.09); --focus:#d94400; --m-edge:#111111; --band:rgba(255,212,0,.35);
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  background-color:var(--bg);
+  background-image:radial-gradient(circle,var(--dot) 1.3px,transparent 1.8px);
+  background-size:14px 14px;
+  color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  line-height:1.55; overflow-x:hidden; position:relative;
+}
+/* 背景装饰:警示条纹色带 + 斜向淡色带 + 很淡的扫描线,全部不拦截点击 */
+.bg{position:fixed;inset:0;overflow:hidden;z-index:0;pointer-events:none}
+.bg .stripe{position:absolute;left:0;right:0;top:0;height:12px;
+  background:repeating-linear-gradient(-45deg,#ffd400 0 12px,#111 12px 24px);border-bottom:3px solid #111}
+.bg .band{position:absolute;left:-20%;width:140%;top:62%;height:64px;transform:rotate(-8deg);
+  background:var(--band)}
+.scan{position:fixed;inset:0;z-index:60;pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 3px);mix-blend-mode:normal}
+@media (prefers-color-scheme:light){.scan{background:repeating-linear-gradient(0deg,rgba(0,0,0,.03) 0 1px,transparent 1px 3px)}}
+.wrap{position:relative;z-index:1;max-width:820px;margin:0 auto;padding:30px 16px 36px}
+
+/* 标题区 */
+.hero{display:flex;align-items:center;gap:14px;margin:4px 0 22px;position:relative}
+.mascot-wrap{
+  flex:0 0 auto;width:108px;height:108px;position:relative;overflow:hidden;
+  background:var(--accent);border:4px solid var(--m-edge);border-radius:22px;
+  box-shadow:5px 5px 0 var(--shade);transform:rotate(-3deg);
+}
+@media (max-width:420px){.mascot-wrap{width:80px;height:80px;border-radius:18px;border-width:3px}}
+.mascot-img,.mascot-fallback{display:block;width:100%;height:100%}
+.mascot-img{object-fit:cover;object-position:top center}
+.mascot-fallback{display:none;padding:6px}
+.mascot-wrap.noimg .mascot-img{display:none}
+.mascot-wrap.noimg .mascot-fallback{display:block}
+.mascot-fallback .torso,.mascot-fallback .ear{fill:#e9e6df;stroke:#111;stroke-width:5;stroke-linejoin:round}
+.mascot-fallback .torso-line{fill:none;stroke:#111;stroke-width:5;stroke-linejoin:round}
+.mascot-fallback .shade{fill:#cbc7bb}
+.mascot-fallback .ear-in{fill:var(--hot)}
+.mascot-fallback .hand,.mascot-fallback .foot{fill:#2b2b30;stroke:#111;stroke-width:3.5}
+.mascot-fallback .screen{fill:#0b0b0e;stroke:#111;stroke-width:3.5}
+.mascot-fallback .ring{fill:none;stroke:#ffd400;stroke-width:3.6}
+.mascot-fallback .scarf{fill:#ff5a1f;stroke:#111;stroke-width:4;stroke-linejoin:round}
+@keyframes bounce{0%,100%{transform:rotate(-3deg) translateY(0)}50%{transform:rotate(-3deg) translateY(-8px)}}
+body.speaking .mascot-wrap{animation:bounce .42s ease-in-out infinite}
+.hero-text{min-width:0;flex:1 1 auto}
+h1{
+  margin:0;font-size:clamp(1.8rem,8.4vw,2.7rem);line-height:1.05;font-weight:900;letter-spacing:.02em;
+  transform:skewX(-8deg);transform-origin:left bottom;text-shadow:3px 3px 0 var(--shade);
+}
+h1 .y{color:var(--accent)}
+@media (prefers-color-scheme:light){
+  h1{text-shadow:3px 3px 0 var(--hot)}
+  h1 .y{text-shadow:3px 3px 0 #111;-webkit-text-stroke:2px #111;paint-order:stroke fill}
+}
+.sticker{
+  display:inline-block;margin-left:10px;vertical-align:middle;font-size:1rem;font-weight:800;line-height:1.35;white-space:nowrap;
+  background:var(--hot);color:#111;border:3px solid #111;padding:2px 10px;transform:skewX(8deg) rotate(-6deg);
+  box-shadow:3px 3px 0 var(--shade);letter-spacing:.08em;text-shadow:none;-webkit-text-stroke:0;
+}
+.serial{position:absolute;right:0;top:-6px;display:none;text-align:right;font:700 .7rem var(--mono);color:var(--muted);letter-spacing:.08em}
+.barcode{height:22px;width:92px;margin:0 0 3px auto;
+  background:repeating-linear-gradient(90deg,var(--ink) 0 2px,transparent 2px 4px,var(--ink) 4px 5px,transparent 5px 8px,var(--ink) 8px 11px,transparent 11px 13px)}
+@media (min-width:600px){.serial{display:block}}
+.cross{position:absolute;width:16px;height:16px;pointer-events:none;opacity:.7;
+  background:linear-gradient(var(--muted),var(--muted)) center/100% 2px no-repeat,linear-gradient(var(--muted),var(--muted)) center/2px 100% no-repeat}
+
+/* 卡片 */
+.pair{display:grid;grid-template-columns:minmax(0,1fr);gap:30px;margin-bottom:30px}
+@media (min-width:800px){
+  .pair{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:26px}
+  .pair .card{display:flex;flex-direction:column}
+  .pair #human{flex:1 1 auto}
+}
+.card{
+  position:relative;background:var(--card);border:3px solid var(--edge);padding:26px 16px 16px;
+  margin-bottom:30px;min-width:0;box-shadow:6px 6px 0 var(--shade);
+}
+.pair .card{margin-bottom:0}
+.tag{
+  position:absolute;top:-17px;left:12px;background:var(--accent);color:#111;border:3px solid #111;
+  font:800 .78rem/1.2 var(--mono);letter-spacing:.06em;padding:3px 10px;text-transform:uppercase;
+  transform:skewX(-8deg);white-space:nowrap;
+}
+label.tag{cursor:pointer}
+textarea{
+  display:block;width:100%;min-height:140px;resize:vertical;font:inherit;font-size:1.05rem;color:var(--ink);
+  background:var(--field);border:3px solid var(--edge);border-radius:0;padding:10px 12px;overflow-wrap:anywhere;
+}
+textarea::placeholder{color:var(--muted);opacity:1}
+textarea:focus{border-color:var(--focus)}
+:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+.row{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px}
+
+/* 按钮:厚边 + 硬阴影 + 按下去 */
+button{
+  font:inherit;font-weight:700;color:var(--ink);background:var(--card2);border:3px solid var(--edge);
+  border-radius:0;padding:6px 16px;min-height:44px;cursor:pointer;box-shadow:4px 4px 0 var(--shade);
+  transition:transform .06s,box-shadow .06s,background .1s;
+}
+button:hover:not(:disabled){background:var(--card);border-color:var(--edge-strong)}
+button:active:not(:disabled){transform:translate(3px,3px);box-shadow:1px 1px 0 var(--shade)}
+button:disabled{opacity:.5;cursor:not-allowed;border-style:dashed;box-shadow:none;transform:translate(2px,2px);
+  background:repeating-linear-gradient(-45deg,var(--card2) 0 6px,var(--card) 6px 12px)}
+button.primary{background:var(--accent);color:#111;border-color:#111}
+button.primary:hover:not(:disabled){background:#ffe14d;border-color:#111}
+button.primary:disabled{color:#333;background:repeating-linear-gradient(-45deg,#b59a00 0 6px,#8a7600 6px 12px);border-color:#111}
+.btn{display:inline-flex;align-items:center;justify-content:center;transform:skewX(-8deg)}
+.btn > *{transform:skewX(8deg)}
+.btn:active:not(:disabled){transform:translate(3px,3px) skewX(-8deg)}
+.btn:disabled{transform:translate(2px,2px) skewX(-8deg)}
+.btn svg{width:18px;height:18px;margin-right:7px;flex:0 0 auto;fill:currentColor}
+.btn svg .st{fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.btn .t{display:inline-block}
+
+/* 音节条:小屏幕 + 键帽 */
+.strip{
+  display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px;padding:12px;min-height:66px;
+  background:#0d0d10 repeating-linear-gradient(0deg,rgba(255,255,255,.04) 0 1px,transparent 1px 3px);
+  border:3px solid var(--edge);color:#b9b5a6;
+  box-shadow:inset 0 0 0 2px #000;
+}
+.chip{
+  min-height:40px;padding:2px 12px;font-size:1.3rem;line-height:1.2;font-weight:700;
+  background:#ece7d6;color:#111;border:2px solid #000;border-bottom-width:5px;border-radius:8px;box-shadow:none;
+}
+.chip:hover:not(:disabled){background:#fff8de;border-color:#000}
+.chip:active:not(:disabled){transform:translateY(3px);border-bottom-width:2px;box-shadow:none;margin-bottom:3px}
+.chip .t{font-size:.9rem;opacity:.8}
+.chip.long{position:relative;padding-right:32px;min-width:64px}
+.chip.long::after{content:"";position:absolute;right:8px;top:52%;width:15px;height:0;border-top:3px solid currentColor;opacity:.75}
+.chip.long.wavy::after{border-top-style:dotted;width:17px}
+.chip.short{padding:2px 6px;font-size:1.02rem;min-width:30px}
+.chip.playing{background:var(--accent);color:#111;box-shadow:0 0 14px 2px #ffd400;transform:translateY(-3px)}
+.dim{color:#b9b5a6;font-size:.95rem;overflow-wrap:anywhere;white-space:pre-wrap}
+.nl{flex-basis:100%;height:0}
+.hint{margin:10px 2px 0;color:var(--muted);font-size:.88rem;overflow-wrap:anywhere}
+
+/* 控件 */
+.chk{display:flex;align-items:center;gap:10px;margin-top:14px;min-height:44px;font-size:.98rem;cursor:pointer}
+input[type=checkbox]{
+  -webkit-appearance:none;appearance:none;flex:0 0 auto;width:26px;height:26px;margin:0;cursor:pointer;
+  border:3px solid var(--edge);background:var(--field);display:grid;place-content:center;box-shadow:3px 3px 0 var(--shade);
+}
+input[type=checkbox]:checked{background:var(--accent);border-color:#111}
+input[type=checkbox]:checked::after{content:"";width:6px;height:12px;border:solid #111;border-width:0 3px 3px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.sliders .srow{display:grid;grid-template-columns:5em minmax(0,1fr) 5em;align-items:center;gap:10px;margin:10px 0;min-height:44px}
+.sliders .n{font-weight:700}
+.sliders output{text-align:right;color:var(--muted);white-space:nowrap;font-family:var(--mono);font-size:.9rem}
+.sliders .note{margin:6px 0 0;color:var(--muted);font-size:.85rem}
+select{
+  -webkit-appearance:none;appearance:none;grid-column:2 / 4;width:100%;min-width:0;min-height:44px;font:inherit;font-weight:700;
+  color:var(--ink);background-color:var(--field);border:3px solid var(--edge);border-radius:0;padding:6px 38px 6px 12px;
+  background-image:linear-gradient(45deg,transparent 50%,var(--ink) 50%),linear-gradient(135deg,var(--ink) 50%,transparent 50%);
+  background-position:calc(100% - 21px) 50%,calc(100% - 15px) 50%;background-size:6px 6px,6px 6px;background-repeat:no-repeat;
+  box-shadow:3px 3px 0 var(--shade);cursor:pointer;
+}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;min-width:0;height:34px;background:transparent;margin:0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:12px;background:var(--field);border:3px solid var(--edge);border-radius:0}
+input[type=range]::-moz-range-track{height:6px;background:var(--field);border:3px solid var(--edge);border-radius:0}
+input[type=range]::-moz-range-progress{height:6px;background:var(--accent)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:20px;height:28px;margin-top:-10px;background:var(--accent);
+  border:3px solid #111;border-radius:0;box-shadow:3px 3px 0 var(--shade);
+}
+input[type=range]::-moz-range-thumb{
+  box-sizing:border-box;width:20px;height:28px;background:var(--accent);border:3px solid #111;border-radius:0;box-shadow:3px 3px 0 var(--shade);
+}
+#status{
+  position:fixed;z-index:70;left:16px;right:16px;bottom:16px;max-width:788px;margin:0 auto;padding:8px 14px;
+  color:var(--hot-text);font:700 .92rem var(--mono);overflow-wrap:anywhere;pointer-events:none;
+  border-left:6px solid var(--hot);background:var(--card);box-shadow:4px 4px 0 var(--shade);
+}
+#status:empty{visibility:hidden}
+
+/* 折叠区 */
+details.card{padding:26px 16px 6px}
+summary{
+  display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer;font-weight:800;list-style:none;padding-bottom:6px;
+}
+summary::-webkit-details-marker{display:none}
+summary::before{
+  content:"";flex:0 0 auto;width:0;height:0;border-style:solid;border-width:7px 0 7px 11px;border-color:transparent transparent transparent var(--accent);
+  transition:transform .12s;
+}
+details[open] > summary::before{transform:rotate(90deg)}
+details p,details li{font-size:.95rem}
+details > div,details > p{margin-bottom:12px}
+.lab{font-weight:800;margin-top:6px}
+.help-grid{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 12px}
+.help-grid button{font-size:1.05rem;padding:4px 12px}
+.help-grid small{color:var(--muted);margin-left:6px;font-weight:400}
+.recrow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 0;border-top:2px dashed var(--edge)}
+.recrow:first-of-type{border-top:0}
+.recrow .c{font-size:1.6rem;min-width:1.6em;font-weight:900;color:var(--accent)}
+.recrow .st{color:var(--muted);font-size:.9rem;flex:1 1 7em;min-width:0}
+.recrow button{padding:4px 12px;font-size:.9rem;min-height:40px;box-shadow:3px 3px 0 var(--shade)}
+.hidden{display:none}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+<div class="bg" aria-hidden="true"><div class="band"></div><div class="stripe"></div></div>
+<div class="scan" aria-hidden="true"></div>
+<main class="wrap">
+  <header class="hero">
+    <div id="mascot" class="mascot-wrap">
+      <img class="mascot-img" src="assets/bangboo.png" alt="邦布" width="96" height="96" onerror="this.parentNode.classList.add('noimg')">
+      <svg class="mascot-fallback" viewBox="0 0 120 120" role="img" aria-label="原创绘制的同人邦布吉祥物">
+        <path class="ear" d="M38 55 L28 22 C26 12 31 7 36 7 C42 7 46 12 45 22 L50 55 Z"></path>
+        <path class="ear-in" d="M43 52 L40.5 22 C40.5 16 44.5 16 44.5 22 L48.5 52 Z"></path>
+        <path class="ear" d="M82 55 L92 22 C94 12 89 7 84 7 C78 7 74 12 75 22 L70 55 Z"></path>
+        <path class="ear-in" d="M77 52 L79.5 22 C79.5 16 75.5 16 75.5 22 L71.5 52 Z"></path>
+        <ellipse class="hand" cx="15" cy="82" rx="7" ry="11" transform="rotate(22 15 82)"></ellipse>
+        <ellipse class="hand" cx="105" cy="82" rx="7" ry="11" transform="rotate(-22 105 82)"></ellipse>
+        <ellipse class="foot" cx="42" cy="113" rx="13" ry="6"></ellipse>
+        <ellipse class="foot" cx="78" cy="113" rx="13" ry="6"></ellipse>
+        <path class="torso" d="M60 38 C84 38 96 54 98 74 C100 96 90 112 60 112 C30 112 20 96 22 74 C24 54 36 38 60 38 Z"></path>
+        <path class="shade" d="M98 74 C100 96 90 112 60 112 C76 108 92 98 98 74 Z"></path>
+        <path class="torso-line" d="M60 38 C84 38 96 54 98 74 C100 96 90 112 60 112 C30 112 20 96 22 74 C24 54 36 38 60 38 Z"></path>
+        <rect class="screen" x="32" y="51" width="56" height="31" rx="14"></rect>
+        <circle class="ring" cx="47" cy="67" r="6.5"></circle>
+        <circle class="ring" cx="73" cy="67" r="6.5"></circle>
+        <rect class="scarf" x="24" y="85" width="72" height="12" rx="6"></rect>
+        <rect class="scarf" x="79" y="92" width="13" height="19" rx="5" transform="rotate(-8 85 92)"></rect>
+      </svg>
+    </div>
+    <div class="hero-text">
+      <h1><span class="y">邦布语</span>翻译器<span class="sticker">嗯呐！</span></h1>
+    </div>
+    <div class="serial" aria-hidden="true"><div class="barcode"></div>NO.0001 // 非官方</div>
+  </header>
+
+  <div class="pair">
+    <section class="card">
+      <label class="tag" for="human">HUMAN // 人话</label>
+      <textarea id="human" placeholder="在这里写点什么……" spellcheck="false"></textarea>
+      <div class="row">
+        <button id="humanCopy" type="button" class="btn"><svg viewBox="0 0 24 24" aria-hidden="true"><rect class="st" x="8" y="8" width="12" height="12" rx="1.5"></rect><path class="st" d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"></path></svg><span class="t">复制</span></button>
+        <button id="humanClear" type="button" class="btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="st" d="M6 6l12 12M18 6L6 18"></path></svg><span class="t">清空</span></button>
+      </div>
+      <label class="chk"><input id="showParen" type="checkbox"> 同时显示括号里的原文</label>
+    </section>
+
+    <section class="card">
+      <label class="tag" for="bang">BANGBOO // 邦布语</label>
+      <i class="cross" style="right:8px;top:8px" aria-hidden="true"></i>
+      <textarea id="bang" placeholder="嗯ˉ呐ˊ哒ˋ！（交给我吧）" spellcheck="false"></textarea>
+      <div id="strip" class="strip" aria-label="音节条"></div>
+      <p id="hint" class="hint"></p>
+      <div class="row">
+        <button id="play" type="button" class="btn primary"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5l13 7.5-13 7.5z"></path></svg><span class="t">听它说</span></button>
+        <button id="stop" type="button" class="btn"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5.5" y="5.5" width="13" height="13" rx="1.5"></rect></svg><span class="t">停</span></button>
+        <button id="bangCopy" type="button" class="btn"><svg viewBox="0 0 24 24" aria-hidden="true"><rect class="st" x="8" y="8" width="12" height="12" rx="1.5"></rect><path class="st" d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"></path></svg><span class="t">复制</span></button>
+        <button id="bangClear" type="button" class="btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="st" d="M6 6l12 12M18 6L6 18"></path></svg><span class="t">清空</span></button>
+      </div>
+    </section>
+  </div>
+
+  <p id="status" role="status" aria-live="polite"></p>
+
+  <section class="card sliders">
+    <span class="tag">VOICE // 声音</span>
+    <div class="srow">
+      <span class="n">音色</span>
+      <select id="preset" aria-label="音色"></select>
+    </div>
+    <div class="srow">
+      <span class="n">音高倍率</span>
+      <input id="pitch" type="range" min="0.7" max="1.4" step="0.01" value="1" aria-label="音高倍率（在所选音色的基准音高上相乘）">
+      <output id="pitchV">380 Hz</output>
+    </div>
+    <div class="srow">
+      <span class="n">语速</span>
+      <input id="speed" type="range" min="0.6" max="1.6" step="0.05" value="1" aria-label="语速">
+      <output id="speedV">1.00x</output>
+    </div>
+    <p class="note">音高倍率是在所选音色的基准音高上再乘的倍率，右边显示的是实际音高。</p>
+  </section>
+
+  <details id="help" class="card">
+    <summary><span class="tag">HELP // 说明</span>五个字和五种声调</summary>
+    <p>邦布语只表达语气和声音。原话藏在邦布语后面看不见的字符里，所以只有翻译器生成、并且完整复制下来的邦布语才能还原成人话；有些聊天软件会过滤这些字符，遇到这种情况可以勾选“同时显示括号里的原文”；手打的邦布语只能读出语气。点下面的按钮可以试听。</p>
+    <div class="lab">五个字</div>
+    <div id="helpChars" class="help-grid"></div>
+    <div class="lab">五种声调（以“呐”为例）</div>
+    <div id="helpTones" class="help-grid"></div>
+    <p>造句规则：词 = 一个以上起头字（嗯、咦、哇）+ 一个以上收尾字（呐、哒），“哒”只出现在词的最后；一句话由一到三个词连写。疑问句会以“咦”开头、末字二声，感叹句偏一声和四声，低落的句子用重复的“嗯”。</p>
+    <p>长短音：重复的字是断奏；“哒”短促；句末“～”拖长并带明显的颤；句末“？”上扬并拉长；“！”整体短促有力；“……”越说越慢、越小声。音节条里小块越宽，念得越长。</p>
+  </details>
+
+  <details id="rec" class="card">
+    <summary><span class="tag">REC // 录音</span>录制我的邦布音</summary>
+    <p>点“录音”后说一个字，约 1.2 秒后自动停止。录好的字会替换合成器的声音，保存在本机浏览器里。如果麦克风用不了，可以上传音频文件。</p>
+    <div id="recRows"></div>
+    <div class="row"><button id="recReset" type="button">全部恢复合成器</button></div>
+    <div style="height:10px"></div>
+  </details>
+
+</main>
+
+<script id="core">
+(function (root) {
+  'use strict';
+
+  var STARTS = '嗯咦哇';            // 嗯 咦 哇
+  var ENDERS = '呐哒';                  // 呐 哒
+  var LETTERS = STARTS + ENDERS;
+  var MARKS = 'ˉˊˇˋ';       // 一二三四声
+  var TONE_CH = ['', 'ˉ', 'ˊ', 'ˇ', 'ˋ'];
+  var OPEN = '（', CLOSE = '）';
+  var Q = '？', EX = '！', ELL = '……', TIL = '～';
+  var BANG_PUNCT = '？！…～?!~';
+  var ENDP = '。!?！？…';      // 切句用的句末标点
+  var CLOSERS = '”’」』）)]】》"\'］〕}';
+  var CORE = /[\p{L}\p{N}\p{Extended_Pictographic}]/u;
+  var SAD_RE = /唉|呜|难过|伤心|对不起|抱歉|可惜|好累|想哭/;
+  var EXC_RE = /哇|好耶|哈哈|太(?![阳空平极监])[^，。！？\s]{1,3}了/;
+
+  function isL(c) { return c !== undefined && c !== '' && LETTERS.indexOf(c) >= 0; }
+  function isStarter(c) { return STARTS.indexOf(c) >= 0; }
+  function isEnder(c) { return ENDERS.indexOf(c) >= 0; }
+  function isWS(c) { return /\s/.test(c); }
+  function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+  function str(x) { return x == null ? '' : String(x); }
+
+  // ---------- 确定性随机 ----------
+  function fnv(s) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+    return h >>> 0;
+  }
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function pickWeighted(rng, weights) {
+    var total = 0, i;
+    for (i = 0; i < weights.length; i++) total += weights[i];
+    var r = rng() * total;
+    for (i = 0; i < weights.length; i++) { r -= weights[i]; if (r < 0) return i; }
+    return weights.length - 1;
+  }
+
+  // ---------- 句子分析 ----------
+  function analyze(s) {
+    var cps = Array.from(s), n = 0, last = -1;
+    for (var i = 0; i < cps.length; i++) if (CORE.test(cps[i])) { n++; last = i; }
+    return { n: n, body: cps.slice(0, last + 1).join(''), tail: cps.slice(last + 1).join('') };
+  }
+  function moodOf(a) {
+    if (/[?？]/.test(a.tail) || /[吗么]$/.test(a.body)) return 'q';
+    if (/[!！]/.test(a.tail)) return 'e';
+    if (/…|\.{2,}|。{2,}/.test(a.tail)) return 's';
+    if (SAD_RE.test(a.body)) return 's';
+    if (EXC_RE.test(a.body)) return 'e';
+    return 'c';
+  }
+  var TONE_W = {
+    c: [1, 2, 2, 1, 2],
+    e: [0.5, 4, 1, 0.5, 4],
+    s: [3, 0.5, 0.5, 4, 3],
+    q: [1, 2, 3, 1, 1]
+  };
+  var START_W = { // 嗯 咦 哇
+    q: [0.2, 0.7, 0.1], e: [0.25, 0.1, 0.65], s: [1, 0, 0], c: [0.7, 0.15, 0.15]
+  };
+  var DA_P = { q: 0.15, e: 0.4, s: 0, c: 0.25 };
+
+  // 返回 [{ch,tone}] 与句末标点
+  function buildSyllables(m, mood, rng) {
+    var k;
+    if (m <= 3) k = 1; else if (m <= 6) k = rng() < 0.5 ? 1 : 2; else k = rng() < 0.5 ? 2 : 3;
+    var sizes = [], i;
+    for (i = 0; i < k; i++) sizes.push(k === 1 ? m : 2);
+    if (k > 1) for (var r = m - 2 * k; r > 0; r--) sizes[Math.floor(rng() * k)]++;
+    var out = [], words = [];
+    for (i = 0; i < k; i++) {
+      var s = sizes[i], a;
+      if (mood === 's') a = rng() < 0.6 ? s - 1 : 1 + Math.floor(rng() * (s - 1));
+      else a = 1 + Math.floor(rng() * rng() * (s - 1));
+      var b = s - a;
+      var st = STARTS.charAt(pickWeighted(rng, START_W[mood]));
+      var stTone = pickWeighted(rng, TONE_W[mood]);
+      var fin = rng() < DA_P[mood] ? '哒' : '呐';
+      var w = [], j;
+      for (j = 0; j < a; j++) w.push({ ch: st, tone: stTone });
+      for (j = 0; j < b - 1; j++) w.push({ ch: '呐', tone: pickWeighted(rng, TONE_W[mood]) });
+      w.push({ ch: fin, tone: pickWeighted(rng, TONE_W[mood]) });
+      words.push(w);
+      out = out.concat(w);
+    }
+    var hasNa = false;
+    for (i = 0; i < out.length; i++) if (out[i].ch === '呐') hasNa = true;
+    if (!hasNa) out[out.length - 1].ch = '呐';
+    if (mood === 'q') out[out.length - 1].tone = 2;
+    return out;
+  }
+
+  // 只返回邦布语部分(不含括号)。
+  function encodeSentence(sentence) {
+    var s = str(sentence);
+    var a = analyze(s);
+    var mood = moodOf(a);
+    var m = clamp(Math.round(1.3 * Math.sqrt(a.n)), 2, 12);
+    var rng = mulberry32(fnv(s));
+    var syl = buildSyllables(m, mood, rng);
+    var res = '';
+    for (var i = 0; i < syl.length; i++) res += syl[i].ch + TONE_CH[syl[i].tone];
+    if (mood === 'q') res += Q;
+    else if (mood === 'e') res += EX;
+    else if (mood === 's') res += ELL;
+    else if (rng() < 0.4) res += TIL;
+    return res;
+  }
+
+  // ---------- 切句 ----------
+  function splitLine(line) {
+    var out = [], i = 0, n = line.length;
+    while (i < n) {
+      var j = i;
+      while (j < n && isWS(line.charAt(j))) j++;
+      if (j > i) { out.push({ ws: true, text: line.slice(i, j) }); i = j; continue; }
+      var k = i;
+      while (k < n) {
+        var c = line.charAt(k); k++;
+        if (c === CLOSE) {
+          // 结构性保证:全角闭括号后(可隔空白)紧跟五个字之一时在此切句,
+          // 这样括号内容里的 CLOSE 永远不会被解码器当成结尾候选。
+          var q = k;
+          while (q < n && isWS(line.charAt(q))) q++;
+          if (q < n && isL(line.charAt(q))) break;
+        }
+        if (ENDP.indexOf(c) >= 0) {
+          while (k < n && ENDP.indexOf(line.charAt(k)) >= 0) k++;
+          while (k < n && CLOSERS.indexOf(line.charAt(k)) >= 0) k++;
+          break;
+        }
+      }
+      var e = k;
+      while (e > i && isWS(line.charAt(e - 1))) e--;
+      out.push({ ws: false, text: line.slice(i, e) });
+      i = e;
+    }
+    return out;
+  }
+
+  // ---------- 隐形载荷 ----------
+  // 载荷 = 句子的 UTF-8 字节 + 1 个校验字节(前面所有字节之和 mod 240)。
+  // 字节 0-239 映射到 U+E0100 起的变体选择符补充区,240-255 映射到 U+FE00 起的变体选择符。
+  // 合法 UTF-8 不含 0xFE/0xFF,校验字节小于 240,所以 U+FE0E/U+FE0F(emoji 表现选择符)永远不会被用到,这是有意的。
+  // 匹配变体选择符的正则等价于 [U+FE00-U+FE0F]|U+DB40[U+DD00-U+DDEF],这里用字符码拼出来。
+  // 已知限制:原文含孤立代理项时 TextEncoder 会把它换成 U+FFFD,往返不成立。
+  var fc = String.fromCharCode;
+  var VS_G = new RegExp('[' + fc(0xFE00) + '-' + fc(0xFE0F) + ']|' + fc(0xDB40) + '[' + fc(0xDD00) + '-' + fc(0xDDEF) + ']', 'g');
+  function byteChar(b) { return b < 240 ? fc(0xDB40) + fc(0xDD00 + b) : fc(0xFE00 + b - 240); }
+  function hide(sentence) {
+    var bytes = new TextEncoder().encode(str(sentence)), sum = 0, out = '';
+    for (var i = 0; i < bytes.length; i++) { sum += bytes[i]; out += byteChar(bytes[i]); }
+    return out + byteChar(sum % 240);
+  }
+  // 还原失败(格式不对、校验不过、不是合法 UTF-8)一律返回 null,不抛异常。
+  function reveal(vs) {
+    try {
+      vs = str(vs);
+      var bytes = [], i = 0;
+      while (i < vs.length) {
+        var c = vs.charCodeAt(i);
+        if (c >= 0xFE00 && c <= 0xFE0F) { bytes.push(240 + c - 0xFE00); i++; }
+        else if (c === 0xDB40) {
+          var d = vs.charCodeAt(i + 1);
+          if (d >= 0xDD00 && d <= 0xDDEF) { bytes.push(d - 0xDD00); i += 2; } else return null;
+        } else return null;
+      }
+      if (bytes.length < 1) return null;
+      var chk = bytes.pop(), sum = 0;
+      if (chk >= 240) return null;
+      for (var k = 0; k < bytes.length; k++) sum += bytes[k];
+      if (sum % 240 !== chk) return null;
+      return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(new Uint8Array(bytes));
+    } catch (e) { return null; }
+  }
+  function stripHidden(text) { return str(text).replace(VS_G, ''); }
+  // 从 i 起读一串连续的变体选择符,返回 [结束下标, 字符个数]
+  function readVS(text, i) {
+    var j = i, cnt = 0;
+    for (;;) {
+      var c = text.charCodeAt(j);
+      if (c >= 0xFE00 && c <= 0xFE0F) { j++; cnt++; }
+      else if (c === 0xDB40) {
+        var d = text.charCodeAt(j + 1);
+        if (d >= 0xDD00 && d <= 0xDDEF) { j += 2; cnt++; }
+        else { j++; cnt++; }   // 截断后残留的孤立高位代理项也算进载荷(校验会失败)
+      } else break;
+    }
+    return [j, cnt];
+  }
+
+  // opts.paren:是否在载荷后面再加全角括号原文(默认否)。载荷始终嵌入。
+  function encode(text, opts) {
+    var paren = !!(opts && opts.paren);
+    var t = str(text).replace(/\r\n/g, '\n');
+    return t.split('\n').map(function (line) {
+      return splitLine(line).map(function (p) {
+        if (p.ws) return p.text;
+        return encodeSentence(p.text) + hide(p.text) + (paren ? OPEN + p.text + CLOSE : '');
+      }).join('');
+    }).join('\n');
+  }
+
+  // ---------- 分词 / 解码 ----------
+  // 第一个"后面(跳过空白)是结尾或五个字之一"的闭括号即为结尾;
+  // 没有则退回括号配对计数;再没有返回 -1。
+  function findClose(text, open) {
+    var n = text.length, k;
+    for (k = open + 1; k < n; k++) {
+      if (text.charAt(k) !== CLOSE) continue;
+      var m = k + 1;
+      while (m < n && isWS(text.charAt(m))) m++;
+      if (m >= n || isL(text.charAt(m))) return k;
+    }
+    var depth = 1;
+    for (k = open + 1; k < n; k++) {
+      var c = text.charAt(k);
+      if (c === OPEN) depth++;
+      else if (c === CLOSE) { depth--; if (depth === 0) return k; }
+    }
+    return -1;
+  }
+
+  // 邦布语段(bang)之后先吃掉连续的变体选择符:hidden = 还原出的句子或 null,
+  // hiddenLen = 隐形字符个数。bang 的 start/end 只覆盖可见的邦布语,不受影响。
+  function tokenize(text) {
+    text = str(text);
+    var toks = [], i = 0, n = text.length, buf = 0;
+    function flush(upto) {
+      if (upto > buf) toks.push({ type: 'text', text: text.slice(buf, upto), start: buf, end: upto });
+    }
+    while (i < n) {
+      if (!isL(text.charAt(i))) { i++; continue; }
+      flush(i);
+      var j = i + 1;
+      while (j < n) {
+        var c = text.charAt(j);
+        if (isL(c) || MARKS.indexOf(c) >= 0 || BANG_PUNCT.indexOf(c) >= 0) j++; else break;
+      }
+      var tok = { type: 'bang', text: text.slice(i, j), start: i, end: j, hidden: null, hiddenLen: 0 };
+      toks.push(tok);
+      var vs = readVS(text, j);
+      if (vs[1] > 0) {
+        tok.hidden = reveal(text.slice(j, vs[0]));
+        tok.hiddenLen = vs[1];
+      }
+      i = vs[0];
+      if (text.charAt(i) === OPEN) {
+        var c2 = findClose(text, i);
+        var closed = c2 >= 0, e = closed ? c2 + 1 : n;
+        toks.push({
+          type: 'paren', text: text.slice(i, e), content: text.slice(i + 1, closed ? c2 : n),
+          closed: closed, start: i, end: e
+        });
+        i = e;
+      }
+      buf = i;
+    }
+    flush(n);
+    return toks;
+  }
+
+  function describe(seg) {
+    var first = seg.charAt(0), run = 0, max = 0, prev = '', i;
+    for (i = 0; i < seg.length; i++) {
+      var c = seg.charAt(i);
+      if (!isL(c)) continue;
+      run = (c === prev) ? run + 1 : 1;
+      prev = c;
+      if (run > max) max = run;
+    }
+    var punct = seg.replace(/[^？！…～?!~]/g, '');
+    var what;
+    if (/[?？]/.test(punct)) what = '在疑惑地问什么';
+    else if (/[!！]/.test(punct)) what = '很兴奋';
+    else if (/…/.test(punct)) what = '有点低落';
+    else if (max >= 3) what = '很着急';
+    else if (first === '咦') what = '在疑惑地问什么';
+    else if (first === '哇') what = '很兴奋';
+    else what = '在平静地说着什么';
+    return OPEN + '听不懂，但它好像' + what + CLOSE;
+  }
+
+  // 优先级:后面有括号取括号内容(看得见的为准) > 载荷有效取载荷 > 语气描述(载荷损坏给明确提示)。
+  function decode(text) {
+    var toks = tokenize(text), out = '';
+    for (var i = 0; i < toks.length; i++) {
+      var t = toks[i];
+      if (t.type === 'text') out += t.text;
+      else if (t.type === 'paren') out += t.content;
+      else if (toks[i + 1] && toks[i + 1].type === 'paren') continue;
+      else if (t.hidden !== null) out += t.hidden;
+      else if (t.hiddenLen > 0) out += OPEN + '听不懂' + String.fromCharCode(0xFF1A) + '藏在里面的话好像被弄丢了' + CLOSE;
+      else out += describe(t.text);
+    }
+    return out;
+  }
+
+  // ---------- 语法校验 ----------
+  function isGrammatical(chars) {
+    var s = str(chars).replace(/[ˉˊˇˋ？！…～?!~]/g, '');
+    return /^(?:[嗯咦哇]+呐*[呐哒])+$/.test(s);
+  }
+
+  // ---------- 发音计划 ----------
+  // 一个小句(以标点结束,或到邦布语段结束)的节奏规则。纯函数,结果写进每个音节的 rate/gain/len/wavy。
+  // 一、位置规则:单个起头字 0.85;连续重复的起头字 0.55(断奏);词中间的收尾字 0.9;词尾的呐 1.15;哒 0.7。
+  //    轻声的缩短由合成器处理,这里不重复乘。
+  // 二、小句末尾规则(按标点种类,优先级 ？ > ！ > …… > ～):
+  //    无标点 末字 x1.25;～ 末字 x1.9 且 wavy;？ 末字 x1.5;
+  //    ！ 整句 x0.85,末字 gain 1.35;…… 整句 x1.2、末字再 x1.7,gain 由 0.8 线性降到 0.55。
+  //    同一种标点每多写一个,效果加强 15%,最多算两个额外的("……"算一个)。
+  //    末字是哒时,拉长倍率减半:1 + (倍率 - 1) / 2。
+  // 三、len:rate >= 1.4 为 long,<= 0.7 为 short,其余 normal。
+  function clauseKind(punct) {
+    var q = 0, e = 0, d = 0, t = 0;
+    for (var i = 0; i < punct.length; i++) {
+      var c = punct.charAt(i);
+      if (c === '?' || c === Q) q++;
+      else if (c === '!' || c === EX) e++;
+      else if (c === '…') d++;
+      else if (c === '~' || c === TIL) t++;
+    }
+    if (q) return { kind: 'q', n: q };
+    if (e) return { kind: 'e', n: e };
+    if (d) return { kind: 's', n: Math.ceil(d / 2) };
+    if (t) return { kind: 't', n: t };
+    return { kind: 'c', n: 0 };
+  }
+  function finishClause(syls, punct, items) {
+    var ck = clauseKind(punct), m = ck.kind, L = syls.length;
+    var strength = 1 + 0.15 * Math.min(2, Math.max(0, ck.n - 1));
+    var j;
+    for (j = 0; j < L; j++) {
+      var sy = syls[j], pitch = 1, gain = 1, rate, wavy = false;
+      var prevSame = j > 0 && syls[j - 1].ch === sy.ch, nextSame = j < L - 1 && syls[j + 1].ch === sy.ch;
+      if (isStarter(sy.ch)) rate = (prevSame || nextSame) ? 0.55 : 0.85;
+      else if (sy.ch === '哒') rate = 0.7;
+      else rate = (j < L - 1 && isEnder(syls[j + 1].ch)) ? 0.9 : 1.15;
+
+      if (m === 'q') pitch = 1 + 0.12 * (L > 1 ? j / (L - 1) : 0.5);
+      else if (m === 'e') { pitch = 1.1; gain = 1 + 0.25 * strength; rate *= 1 - 0.15 * strength; }
+      else if (m === 's') {
+        pitch = 0.86;
+        gain = L > 1 ? 0.8 - 0.25 * j / (L - 1) : 0.55;
+        rate *= 1 + 0.2 * strength;
+      }
+
+      if (j === L - 1) {
+        var mul = 1;
+        if (m === 'c') mul = 1.25;
+        else if (m === 't') { mul = 1 + 0.9 * strength; wavy = true; }
+        else if (m === 'q') mul = 1 + 0.5 * strength;
+        else if (m === 's') mul = 1 + 0.7 * strength;
+        else if (m === 'e') gain = 1 + 0.35 * strength;
+        if (mul > 1 && sy.ch === '哒') mul = 1 + (mul - 1) / 2;
+        rate *= mul;
+      }
+
+      var gap = 0.04;
+      if (j < L - 1) { if (isEnder(sy.ch) && isStarter(syls[j + 1].ch)) gap = 0.09; }
+      else gap = punct ? (m === 's' ? 0.4 : 0.28) : 0.12;
+      items.push({
+        ch: sy.ch, tone: sy.tone, pos: sy.pos, end: sy.end,
+        pitch: pitch, gain: gain, rate: rate, gap: gap, mood: m === 't' ? 'c' : m,
+        len: rate >= 1.4 ? 'long' : (rate <= 0.7 ? 'short' : 'normal'), wavy: wavy
+      });
+    }
+  }
+  function parseBang(tok, items) {
+    var s = tok.text, i = 0, syls = [], punct = '';
+    while (i < s.length) {
+      var c = s.charAt(i);
+      if (isL(c)) {
+        if (punct !== '') { finishClause(syls, punct, items); syls = []; punct = ''; }
+        var sy = { ch: c, tone: 0, pos: tok.start + i, end: tok.start + i + 1 };
+        i++;
+        var mk = MARKS.indexOf(s.charAt(i));
+        if (i < s.length && mk >= 0) { sy.tone = mk + 1; sy.end++; i++; }
+        syls.push(sy);
+      } else {
+        if (BANG_PUNCT.indexOf(c) >= 0) punct += c;
+        i++;
+      }
+    }
+    if (syls.length) finishClause(syls, punct, items);
+  }
+  function bump(items, g) {
+    if (items.length) { var l = items[items.length - 1]; if (l.gap < g) l.gap = g; }
+  }
+  function plan(text) {
+    var toks = tokenize(text), items = [];
+    for (var i = 0; i < toks.length; i++) {
+      var t = toks[i];
+      if (t.type === 'bang') parseBang(t, items);
+      else if (t.type === 'paren') bump(items, 0.35);
+      else if (t.text.indexOf('\n') >= 0) bump(items, 0.35);
+    }
+    return items;
+  }
+
+  root.Bangboo = {
+    encode: encode, decode: decode, encodeSentence: encodeSentence, tokenize: tokenize,
+    plan: plan, isGrammatical: isGrammatical, describe: describe,
+    hide: hide, reveal: reveal, stripHidden: stripHidden,
+    TONE_CH: TONE_CH, MARKS: MARKS, LETTERS: LETTERS, STARTS: STARTS, ENDERS: ENDERS
+  };
+})(globalThis);
+</script>
+
+<script id="app">
+(function () {
+  'use strict';
+  var B = globalThis.Bangboo;
+  var $ = function (id) { return document.getElementById(id); };
+  var els = {
+    human: $('human'), bang: $('bang'), strip: $('strip'), status: $('status'),
+    pitch: $('pitch'), speed: $('speed'), pitchV: $('pitchV'), speedV: $('speedV'),
+    preset: $('preset'), paren: $('showParen'), hint: $('hint')
+  };
+  var S = {
+    ctx: null, comp: null, run: null,
+    presetName: 'default', pitchMul: 1, speed: 1, paren: false,
+    samples: {}, bufs: {}, plan: [], chips: [], lastChip: -1, recBusy: false
+  };
+  var CHARS = ['嗯', '咦', '呐', '哒', '哇'];
+  var BASE_DUR = { '嗯': 0.30, '咦': 0.22, '呐': 0.26, '哒': 0.22, '哇': 0.28 };
+  var TONE_SEMI = { 1: [4, 4], 2: [-2, 5], 3: [0, -5, -4, 1], 4: [5, -4], 0: [0, -2] };
+  var A_FORM = [[900, 1], [1400, 0.6], [2900, 0.3]];
+  var O_FORM = [[700, 1], [1100, 0.6], [2700, 0.2]];   // "a" 往 "o" 靠一点
+  // 共振峰表。from/to: [[共振峰Hz, 幅度]...];s0/s1: 滑动起止(占发声时长的比例)
+  var VOICE_SAW = {   // 旧版(电子嗓),参数不变
+    '嗯': { from: [[500, 1], [1500, 0.3], [2500, 0.15]], to: [[300, 1], [1100, 0.06], [2400, 0.03]], s0: 0.05, s1: 0.4 },
+    '咦': { from: [[320, 1], [2600, 0.5], [3400, 0.3]], to: null },
+    '呐': { from: [[300, 1], [1200, 0.08], [2400, 0.04]], to: A_FORM, s0: 0.12, s1: 0.32 },
+    '哒': { from: A_FORM, to: null, burst: true },
+    '哇': { from: [[400, 1], [800, 0.7], [2600, 0.25]], to: A_FORM, s0: 0.1, s1: 0.5 }
+  };
+  var VOICE_SOFT = {  // 圆润版:高次共振峰更弱,"a" 偏 "o"
+    '嗯': { from: [[450, 1], [1300, 0.25], [2400, 0.1]], to: [[300, 1], [1000, 0.05], [2300, 0.02]], s0: 0.05, s1: 0.4 },
+    '咦': { from: [[320, 1], [2600, 0.45], [3300, 0.2]], to: null },
+    '呐': { from: [[300, 1], [1100, 0.08], [2300, 0.03]], to: O_FORM, s0: 0.12, s1: 0.32 },
+    '哒': { from: O_FORM, to: null, burst: true },
+    '哇': { from: [[400, 1], [800, 0.7], [2500, 0.2]], to: O_FORM, s0: 0.1, s1: 0.5 }
+  };
+  // 音色预设。所有合成参数都从这里读。
+  //  kind: 'soft' 三角波+低通方波+低八度正弦,共振峰与干声混合;'saw' 旧版锯齿波+带通
+  //  base: 基准音高 Hz;durScale/gapScale: 字长/字间停顿倍率;toneScale: 声调曲线幅度倍率
+  //  scoop: 起音从下方滑上来的半音数;spring/jitter: 弹性半音数 / 逐字音高起伏(半音)
+  //  attack/decay/sus: 包络起音秒数 / 衰减秒数 / 衰减后的持续电平比例;level: 峰值电平
+  //  tri/sq/sqCut/sub: 三角波比例 / 方波比例 / 方波低通 Hz / 低八度正弦电平
+  //  dry/wet/formQ/formGain: 干声比例 / 共振峰声比例 / 三个共振峰的 Q / 共振峰支路增益
+  var PRESETS = {
+    'default': {
+      label: '憨厚活泼（默认）', kind: 'soft', base: 380, durScale: 0.85, gapScale: 0.9, toneScale: 1,
+      scoop: 1.5, spring: 2.5, jitter: 0.6, attack: 0.025, decay: 0.12, sus: 0.75, level: 0.30,
+      burst: 0.25, vib: 10, tri: 1, sq: 0.25, sqCut: 2000, sub: 0.35,
+      dry: 0.5, wet: 0.5, formQ: [3.5, 3.5, 4], formGain: 1.6, voice: VOICE_SOFT
+    },
+    'dull': {
+      label: '更憨', kind: 'soft', base: 300, durScale: 1.05, gapScale: 1.1, toneScale: 0.9,
+      scoop: 3.5, spring: 1.2, jitter: 0.3, attack: 0.03, decay: 0.15, sus: 0.85, level: 0.32,
+      burst: 0.2, vib: 8, tri: 1, sq: 0.12, sqCut: 1500, sub: 0.4,
+      dry: 0.6, wet: 0.4, formQ: [3, 3, 3], formGain: 1.6, voice: VOICE_SOFT
+    },
+    'lively': {
+      label: '更活泼', kind: 'soft', base: 460, durScale: 0.7, gapScale: 0.7, toneScale: 1.3,
+      scoop: 1.0, spring: 3.5, jitter: 1.0, attack: 0.01, decay: 0.09, sus: 0.5, level: 0.30,
+      burst: 0.3, vib: 12, tri: 0.7, sq: 0.4, sqCut: 2500, sub: 0.3,
+      dry: 0.45, wet: 0.55, formQ: [3.5, 4, 4], formGain: 1.6, voice: VOICE_SOFT
+    },
+    'electro': {
+      label: '电子嗓（旧版）', kind: 'saw', base: 330, durScale: 1, gapScale: 1, toneScale: 1,
+      scoop: 0, spring: 0, jitter: 0, attack: 0.015, decay: 0, sus: 1, level: 0.5,
+      burst: 0.35, vib: 14, formQ: [6, 10, 12], formGain: 2.5, voice: VOICE_SAW
+    }
+  };
+  var PRESET_ORDER = ['default', 'dull', 'lively', 'electro'];
+  var statusTimer = 0;
+
+  function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+  function say(msg) {
+    els.status.textContent = msg;
+    clearTimeout(statusTimer);
+    if (msg) statusTimer = setTimeout(function () { els.status.textContent = ''; }, 6000);
+  }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  // ================= 音频 =================
+  function makeComp(ctx) {
+    var c = ctx.createDynamicsCompressor();
+    c.threshold.value = -18; c.knee.value = 20; c.ratio.value = 6;
+    c.attack.value = 0.005; c.release.value = 0.15;
+    c.connect(ctx.destination);
+    return c;
+  }
+  function ensureCtx() {
+    if (!S.ctx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) throw new Error('no AudioContext');
+      S.ctx = new AC();
+      S.comp = makeComp(S.ctx);
+    }
+    if (S.ctx.state === 'suspended') { try { S.ctx.resume(); } catch (e) { /* 忽略 */ } }
+    return S.ctx;
+  }
+  function curPreset() { return PRESETS[S.presetName] || PRESETS['default']; }
+  function newRun() {
+    var out = S.ctx.createGain();
+    out.gain.value = 1;
+    out.connect(S.comp);
+    var run = { out: out, timers: [], sources: [] };
+    S.run = run;
+    return run;
+  }
+  function stopAll() {
+    var r = S.run;
+    S.run = null;
+    if (r) {
+      r.timers.forEach(function (t) { clearTimeout(t); });
+      try {
+        var now = S.ctx.currentTime;
+        r.out.gain.cancelScheduledValues(now);
+        r.out.gain.setValueAtTime(0, now);
+      } catch (e) { /* 忽略 */ }
+      r.sources.forEach(function (s) { try { s.stop(); } catch (e) { /* 忽略 */ } });
+      setTimeout(function () { try { r.out.disconnect(); } catch (e) { /* 忽略 */ } }, 60);
+    }
+    clearHighlight();
+  }
+
+  // 声调曲线(采样播放用):半音数组线性插值成 N 点倍率曲线
+  function curve(semis, mult, N) {
+    var out = new Float32Array(N);
+    for (var i = 0; i < N; i++) {
+      var x = i / (N - 1) * (semis.length - 1);
+      var k = Math.min(Math.floor(x), semis.length - 2), fr = x - k;
+      var s = semis[k] * (1 - fr) + semis[k + 1] * fr;
+      out[i] = mult * Math.pow(2, s / 12);
+    }
+    return out;
+  }
+  // 确定性伪随机,由字在句中的序号和声调算出,0..1
+  function hash01(idx, tone) {
+    var x = Math.sin(idx * 12.9898 + tone * 78.233) * 43758.5453;
+    return x - Math.floor(x);
+  }
+  // 合成器音高曲线:声调 + 起音下方滑上来 + 阻尼弹性 + 逐字起伏。x 为字内归一化时间。
+  function pitchCurve(P, tone, f0, idx, N) {
+    var semis = TONE_SEMI[tone] || TONE_SEMI[0];
+    var out = new Float32Array(N);
+    var jit = P.jitter * (hash01(idx, tone) * 2 - 1);
+    for (var i = 0; i < N; i++) {
+      var x = i / (N - 1), pos = x * (semis.length - 1);
+      var k = Math.min(Math.floor(pos), semis.length - 2), fr = pos - k;
+      var s = (semis[k] * (1 - fr) + semis[k + 1] * fr) * P.toneScale + jit;
+      s -= P.scoop * Math.exp(-6 * x);
+      s -= P.spring * Math.exp(-4 * x) * Math.cos(10 * x);
+      out[i] = f0 * Math.pow(2, s / 12);
+    }
+    return out;
+  }
+  function noiseBuffer(ctx) {
+    if (!ctx.__bbNoise) {
+      var len = Math.max(1, Math.floor(ctx.sampleRate * 0.05));
+      var b = ctx.createBuffer(1, len, ctx.sampleRate), d = b.getChannelData(0);
+      for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;   // 只是爆破噪声,不影响确定性的音高
+      ctx.__bbNoise = b;
+    }
+    return ctx.__bbNoise;
+  }
+  function synthDur(P, ch, tone, rate) {
+    return Math.max(0.09, (BASE_DUR[ch] || 0.25) * (rate || 1) * (tone === 0 ? 0.6 : 1) * P.durScale);
+  }
+
+  // 共振峰并联:src -> 3 个带通 -> 各自增益 -> out
+  function addFormants(ctx, P, v, src, out, ts, vd) {
+    for (var i = 0; i < 3; i++) {
+      var bp = ctx.createBiquadFilter(), fg = ctx.createGain();
+      bp.type = 'bandpass'; bp.Q.value = P.formQ[i];
+      var f1 = v.from[i][0], a1 = v.from[i][1] * P.formGain;
+      bp.frequency.setValueAtTime(f1, ts);
+      fg.gain.setValueAtTime(a1, ts);
+      if (v.to) {
+        var f2 = v.to[i][0], a2 = v.to[i][1] * P.formGain;
+        bp.frequency.setValueAtTime(f1, ts + v.s0 * vd);
+        bp.frequency.exponentialRampToValueAtTime(f2, ts + v.s1 * vd);
+        fg.gain.setValueAtTime(a1, ts + v.s0 * vd);
+        fg.gain.linearRampToValueAtTime(a2, ts + v.s1 * vd);
+      }
+      src.connect(bp); bp.connect(fg); fg.connect(out);
+    }
+  }
+
+  // 合成器实现(实时和离线共用)。o: {preset,pitchMul,pitch,gain,rate,idx,track}。返回实际时长(秒)。
+  function playSynth(ctx, dest, ch, tone, t0, o) {
+    var P = o.preset, v = P.voice[ch] || P.voice['呐'];
+    var dur = synthDur(P, ch, tone, o.rate);
+    var pre = v.burst ? 0.025 : 0;
+    var vd = dur - pre;                       // 发声时长,至少 0.065 秒
+    var ts = t0 + pre, te = ts + vd;
+    var g = o.gain || 1, idx = o.idx || 0;
+    var f0 = P.base * (o.pitchMul || 1) * (o.pitch || 1);
+    var track = o.track || [];
+    var oscs = [];
+    function mkOsc(type, mult) {
+      var os = ctx.createOscillator();
+      os.type = type;
+      os.frequency.setValueCurveAtTime(pitchCurve(P, tone, f0 * mult, idx, 32), ts, vd);
+      oscs.push(os);
+      return os;
+    }
+
+    // 包络:快起,(可选)衰减到持续电平,再释音。起音+释音不超过字长的一半。
+    var env = ctx.createGain();
+    var peak = P.level * g;
+    var a = Math.min(P.attack, vd * 0.2), r = Math.min(0.06, vd * 0.3);
+    var hold = peak;
+    env.gain.setValueAtTime(0, ts);
+    env.gain.linearRampToValueAtTime(peak, ts + a);
+    var dd = Math.min(P.decay, vd - a - r);
+    if (P.sus < 1 && dd > 0.005) { hold = peak * P.sus; env.gain.linearRampToValueAtTime(hold, ts + a + dd); }
+    env.gain.setValueAtTime(hold, te - r);
+    env.gain.linearRampToValueAtTime(0, te);
+    env.connect(dest);
+
+    if (P.kind === 'saw') {
+      addFormants(ctx, P, v, mkOsc('sawtooth', 1), env, ts, vd);
+    } else {
+      var mix = ctx.createGain();
+      var tri = mkOsc('triangle', 1), gTri = ctx.createGain();
+      gTri.gain.value = P.tri; tri.connect(gTri); gTri.connect(mix);
+      var sq = mkOsc('square', 1), lp = ctx.createBiquadFilter(), gSq = ctx.createGain();
+      lp.type = 'lowpass'; lp.frequency.value = P.sqCut;
+      gSq.gain.value = P.sq; sq.connect(lp); lp.connect(gSq); gSq.connect(mix);
+      var gDry = ctx.createGain(), gWet = ctx.createGain();
+      gDry.gain.value = P.dry; gWet.gain.value = P.wet;
+      mix.connect(gDry); gDry.connect(env);
+      gWet.connect(env);
+      addFormants(ctx, P, v, mix, gWet, ts, vd);
+      var sub = mkOsc('sine', 0.5), gSub = ctx.createGain();   // 低八度垫底,跟随同一条曲线的一半
+      gSub.gain.value = P.sub; sub.connect(gSub); gSub.connect(env);
+    }
+
+    // 轻微颤音(音分),接到每个振荡器的 detune
+    var lfo = ctx.createOscillator(), lg = ctx.createGain();
+    lfo.type = 'sine'; lfo.frequency.value = 5.5;
+    lg.gain.setValueAtTime(0, ts);
+    // wavy(句末的波浪号):颤音深度约 4 倍,起得更早,听起来是拖着晃的
+    lg.gain.linearRampToValueAtTime(o.wavy ? P.vib * 4 : P.vib, ts + vd * (o.wavy ? 0.25 : 0.6));
+    lfo.connect(lg);
+    oscs.forEach(function (os) { lg.connect(os.detune); });
+    oscs.push(lfo);
+    oscs.forEach(function (os) { os.start(ts); os.stop(te + 0.03); track.push(os); });
+
+    if (v.burst) {
+      var ns = ctx.createBufferSource(), hp = ctx.createBiquadFilter(), bg = ctx.createGain();
+      ns.buffer = noiseBuffer(ctx);
+      hp.type = 'highpass'; hp.frequency.value = 2500;
+      bg.gain.setValueAtTime(0, t0 + 0.01);
+      bg.gain.linearRampToValueAtTime(P.burst * g, t0 + 0.013);
+      bg.gain.linearRampToValueAtTime(0, t0 + 0.03);
+      ns.connect(hp); hp.connect(bg); bg.connect(dest);
+      ns.start(t0 + 0.01); ns.stop(t0 + 0.05);
+      track.push(ns);
+    }
+    return dur;
+  }
+
+  function sampleBuffer(ctx, ch) {
+    if (!S.bufs[ch] && S.samples[ch]) {
+      var rec = S.samples[ch];
+      var b = ctx.createBuffer(1, rec.data.length, rec.rate);
+      b.getChannelData(0).set(rec.data);
+      S.bufs[ch] = b;
+    }
+    return S.bufs[ch];
+  }
+  // 采样实现:用 playbackRate 曲线做声调,末尾 30ms 淡出。返回实际时长。
+  function playSample(ctx, dest, ch, tone, t0, o) {
+    var buf = sampleBuffer(ctx, ch);
+    var rate = o.rate || 1, g = o.gain || 1;
+    var pb = (o.pitch || 1) * Math.sqrt(1 / rate) * (tone === 0 ? 1.25 : 1);
+    pb = clamp(pb, 0.4, 2.5);
+    var cv = curve(TONE_SEMI[tone] || TONE_SEMI[0], pb, 24);
+    var mean = 0, i;
+    for (i = 0; i < cv.length; i++) mean += cv[i];
+    mean /= cv.length;
+    var D = Math.max(0.06, buf.duration / mean);
+    var src = ctx.createBufferSource(), gn = ctx.createGain();
+    src.buffer = buf;
+    src.playbackRate.setValueCurveAtTime(cv, t0, D);
+    var fade = Math.min(0.03, D * 0.5);
+    gn.gain.setValueAtTime(0.9 * g, t0);
+    gn.gain.setValueAtTime(0.9 * g, t0 + D - fade);
+    gn.gain.linearRampToValueAtTime(0, t0 + D);
+    src.connect(gn); gn.connect(dest);
+    src.start(t0); src.stop(t0 + D + 0.02);
+    if (o.track) o.track.push(src);
+    return D;
+  }
+  // 统一入口:有录音(且是实时 ctx、没禁用采样)走采样,否则走合成器。
+  function playSyllable(ctx, dest, ch, tone, t0, opts) {
+    var o = opts || {};
+    if (!o.noSamples && ctx === S.ctx && S.samples[ch]) return playSample(ctx, dest, ch, tone, t0, o);
+    return playSynth(ctx, dest, ch, tone, t0, o);
+  }
+
+  // 调度:实时播放和离线渲染共用。cfg: {preset,pitchMul,speed,useSamples,track}
+  // 返回 {end, events:[{idx,t}]},t 是该音节开始的 ctx 时间。
+  function schedule(ctx, dest, items, t0, cfg) {
+    var t = t0, ev = [], P = cfg.preset, spd = cfg.speed || 1;
+    items.forEach(function (it, i) {
+      var idx = it.idx != null ? it.idx : i;
+      var dur = playSyllable(ctx, dest, it.ch, it.tone, t, {
+        preset: P, pitchMul: cfg.pitchMul, pitch: it.pitch, gain: it.gain,
+        rate: it.rate / spd, idx: idx, wavy: !!it.wavy, track: cfg.track, noSamples: !cfg.useSamples
+      });
+      ev.push({ idx: idx, t: t });
+      t += dur + it.gap * P.gapScale / spd;
+    });
+    return { end: t, events: ev };
+  }
+  function realCfg(track) {
+    return { preset: curPreset(), pitchMul: S.pitchMul, speed: S.speed, useSamples: true, track: track };
+  }
+
+  // 离线渲染(只用合成器):走和实时播放同一条 schedule / playSynth 路径。
+  function render(text, presetName, ropt) {
+    return new Promise(function (resolve, reject) {
+      try {
+        ropt = ropt || {};
+        var P = PRESETS[presetName] || curPreset();
+        var items = B.plan(String(text == null ? '' : text));
+        var spd = ropt.speed || 1, sr = 44100, t0 = 0.05, est = t0;
+        items.forEach(function (it) { est += synthDur(P, it.ch, it.tone, it.rate / spd) + it.gap * P.gapScale / spd; });
+        var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        var ctx = new OAC(1, Math.max(1, Math.ceil((est + 0.4) * sr)), sr);
+        var out = ctx.createGain();
+        out.connect(makeComp(ctx));
+        schedule(ctx, out, items, t0, { preset: P, pitchMul: ropt.pitchMul || 1, speed: spd, useSamples: false, track: [] });
+        var finished = false;
+        var done = function (buf) {
+          if (finished) return;
+          finished = true;
+          resolve({ sampleRate: buf.sampleRate, data: buf.getChannelData(0).slice() });
+        };
+        ctx.oncomplete = function (e) { done(e.renderedBuffer); };
+        var p = ctx.startRendering();
+        if (p && p.then) p.then(done, reject);
+      } catch (e) { reject(e); }
+    });
+  }
+  window.BangbooAudio = { render: render, presets: PRESETS, order: PRESET_ORDER };
+
+  function setPlayingUI(on) {
+    $('play').disabled = on;
+    if (document.body) document.body.classList.toggle('speaking', !!on);   // 吉祥物容器弹跳(纯 CSS 动画)
+  }
+  function clearHighlight() {
+    if (S.lastChip >= 0 && S.chips[S.lastChip]) S.chips[S.lastChip].classList.remove('playing');
+    S.lastChip = -1;
+    setPlayingUI(false);
+  }
+  function highlight(idx) {
+    if (S.lastChip >= 0 && S.chips[S.lastChip]) S.chips[S.lastChip].classList.remove('playing');
+    S.lastChip = idx;
+    if (S.chips[idx]) S.chips[idx].classList.add('playing');
+    if (document.body) document.body.classList.add('speaking');
+  }
+
+  function speak() {
+    var text = els.bang.value;
+    stopAll();
+    var P = B.plan(text);
+    if (!P.length) { say('邦布语框里没有可以念的字。'); return; }
+    try { ensureCtx(); } catch (e) { say('这个浏览器不能播放声音。'); return; }
+    try {
+      var run = newRun();
+      setPlayingUI(true);
+      var res = schedule(S.ctx, run.out, P, S.ctx.currentTime + 0.1, realCfg(run.sources));
+      res.events.forEach(function (ev) {
+        var d = Math.max(0, (ev.t - S.ctx.currentTime) * 1000);
+        run.timers.push(setTimeout(function () { if (S.run === run) highlight(ev.idx); }, d));
+      });
+      run.timers.push(setTimeout(function () { if (S.run === run) stopAll(); },
+        Math.max(0, (res.end - S.ctx.currentTime) * 1000) + 100));
+    } catch (e) {
+      stopAll();
+      say('播放失败：' + (e && e.message ? e.message : e));
+    }
+  }
+
+  // 单个字试听(说明区、音节条小块、录音试听共用)
+  function playOne(ch, tone, item, chipIdx) {
+    stopAll();
+    try { ensureCtx(); } catch (e) { say('这个浏览器不能播放声音。'); return; }
+    try {
+      var run = newRun();
+      var it = item
+        ? { ch: ch, tone: tone, pitch: item.pitch, gain: item.gain, rate: item.rate, wavy: item.wavy, gap: 0, idx: chipIdx }
+        : { ch: ch, tone: tone, pitch: 1, gain: 1, rate: 1, gap: 0, idx: 0 };
+      var res = schedule(S.ctx, run.out, [it], S.ctx.currentTime + 0.05, realCfg(run.sources));
+      if (chipIdx != null) highlight(chipIdx);
+      run.timers.push(setTimeout(function () { if (S.run === run) stopAll(); },
+        Math.max(0, (res.end - S.ctx.currentTime) * 1000) + 150));
+    } catch (e) {
+      stopAll();
+      say('播放失败：' + (e && e.message ? e.message : e));
+    }
+  }
+
+  // ================= 音节条 =================
+  function renderStrip(text) {
+    var P = B.plan(text);
+    S.plan = P; S.chips = []; S.lastChip = -1;
+    var box = els.strip;
+    while (box.firstChild) box.removeChild(box.firstChild);
+    if (!text) { box.appendChild(el('span', 'dim', '邦布语会显示在这里，点一下小块可以单独听。')); return; }
+    var cur = 0;
+    function dim(a, b) {
+      if (b <= a) return;
+      text.slice(a, b).split('\n').forEach(function (part, i) {
+        if (i > 0) box.appendChild(el('span', 'nl'));
+        part = B.stripHidden(part);   // 隐形字符不当成可见内容
+        if (part) box.appendChild(el('span', 'dim', part));
+      });
+    }
+    P.forEach(function (it, idx) {
+      dim(cur, it.pos);
+      var chip = el('button', 'chip' + (it.len === 'long' ? ' long' : it.len === 'short' ? ' short' : '') + (it.wavy ? ' wavy' : ''));
+      chip.type = 'button';
+      chip.appendChild(document.createTextNode(it.ch));
+      if (it.tone > 0) chip.appendChild(el('span', 't', B.TONE_CH[it.tone]));
+      chip.setAttribute('aria-label', it.ch + (it.tone ? '（' + ['', '一', '二', '三', '四'][it.tone] + '声）' : '（轻声）'));
+      chip.addEventListener('click', function () { playOne(it.ch, it.tone, it, idx); });
+      box.appendChild(chip);
+      S.chips.push(chip);
+      cur = it.end;
+    });
+    dim(cur, text.length);
+    renderHint(text);
+  }
+  // 说明当前邦布语里藏了多少个字的原话
+  function renderHint(text) {
+    var ok = 0, bad = 0;
+    B.tokenize(text).forEach(function (t) {
+      if (t.type !== 'bang' || !t.hiddenLen) return;
+      if (t.hidden !== null) ok += Array.from(t.hidden).length; else bad++;
+    });
+    var msg = '';
+    if (!text) msg = '';
+    else if (ok > 0) msg = '这段邦布语里藏了 ' + ok + ' 个字的原话（看不见，但复制时会一起带走）。' + (bad ? '另有 ' + bad + ' 段藏着的话已损坏。' : '');
+    else if (bad > 0) msg = '这段邦布语里有藏着的话，但已损坏，还原不出来了。';
+    else msg = '这段邦布语里没有藏原话，只能读出语气。';
+    els.hint.textContent = msg;
+  }
+
+  // ================= 文本同步 =================
+  function onHuman() {
+    stopAll();
+    els.bang.value = B.encode(els.human.value, { paren: S.paren });
+    renderStrip(els.bang.value);
+  }
+  function onBang() {
+    stopAll();
+    els.human.value = B.decode(els.bang.value);
+    renderStrip(els.bang.value);
+  }
+
+  function copyText(ta) {
+    var text = ta.value;
+    if (!text) { say('没有内容可复制。'); return; }
+    function fallback() {
+      try {
+        ta.focus(); ta.select();
+        var ok = document.execCommand('copy');
+        say(ok ? '已复制。' : '复制失败，请手动选中后复制。');
+      } catch (e) { say('复制失败，请手动选中后复制。'); }
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { say('已复制。'); }, fallback);
+      } else fallback();
+    } catch (e) { fallback(); }
+  }
+
+  // ================= 设置 =================
+  function loadSettings() {
+    try {
+      var j = JSON.parse(localStorage.getItem('bangboo.settings') || '{}');
+      if (typeof j.pitchMul === 'number' && isFinite(j.pitchMul)) S.pitchMul = clamp(j.pitchMul, 0.7, 1.4);
+      if (typeof j.speed === 'number' && isFinite(j.speed)) S.speed = clamp(j.speed, 0.6, 1.6);
+      if (typeof j.preset === 'string' && PRESETS[j.preset]) S.presetName = j.preset;
+      if (typeof j.paren === 'boolean') S.paren = j.paren;
+    } catch (e) { /* 读不到就用默认值 */ }
+  }
+  function saveSettings() {
+    try {
+      localStorage.setItem('bangboo.settings', JSON.stringify({
+        pitchMul: S.pitchMul, speed: S.speed, preset: S.presetName, paren: S.paren
+      }));
+    } catch (e) { /* 忽略 */ }
+  }
+  function syncSliders() {
+    els.pitch.value = S.pitchMul; els.speed.value = S.speed;
+    els.preset.value = S.presetName; els.paren.checked = S.paren;
+    els.pitchV.textContent = Math.round(curPreset().base * S.pitchMul) + ' Hz';
+    els.speedV.textContent = S.speed.toFixed(2) + 'x';
+  }
+
+  // ================= IndexedDB =================
+  function idbOpen() {
+    return new Promise(function (res, rej) {
+      try {
+        if (!window.indexedDB) { rej(new Error('no indexedDB')); return; }
+        var rq = indexedDB.open('bangboo-voice', 1);
+        rq.onupgradeneeded = function () { rq.result.createObjectStore('samples', { keyPath: 'ch' }); };
+        rq.onsuccess = function () { res(rq.result); };
+        rq.onerror = function () { rej(rq.error || new Error('indexedDB error')); };
+        rq.onblocked = function () { rej(new Error('indexedDB blocked')); };
+      } catch (e) { rej(e); }
+    });
+  }
+  function idbTx(mode, fn) {
+    return idbOpen().then(function (db) {
+      return new Promise(function (res, rej) {
+        var req;
+        try {
+          var tx = db.transaction('samples', mode);
+          req = fn(tx.objectStore('samples'));
+          tx.oncomplete = function () { db.close(); res(req && req.result); };
+          tx.onerror = tx.onabort = function () { db.close(); rej(tx.error || new Error('indexedDB tx')); };
+        } catch (e) { try { db.close(); } catch (e2) { /* 忽略 */ } rej(e); }
+      });
+    });
+  }
+  var idbPut = function (rec) { return idbTx('readwrite', function (st) { return st.put(rec); }); };
+  var idbDelete = function (ch) { return idbTx('readwrite', function (st) { return st.delete(ch); }); };
+  var idbClear = function () { return idbTx('readwrite', function (st) { return st.clear(); }); };
+  var idbAll = function () { return idbTx('readonly', function (st) { return st.getAll(); }); };
+
+  // ================= 录音 =================
+  function decodeAudio(ab) {
+    return new Promise(function (res, rej) {
+      try {
+        var p = S.ctx.decodeAudioData(ab, res, rej);
+        if (p && p.then) p.then(res, rej);
+      } catch (e) { rej(e); }
+    });
+  }
+  // 裁掉首尾静音,最长 0.6 秒,归一化。几乎没声音返回 null。
+  function processBuffer(ab) {
+    var src = ab.getChannelData(0), rate = ab.sampleRate, n = src.length, i, peak = 0;
+    for (i = 0; i < n; i++) { var v = Math.abs(src[i]); if (v > peak) peak = v; }
+    if (peak < 0.02) return null;
+    var thr = Math.max(0.01, peak * 0.08), s = 0, e = n - 1;
+    while (s < n && Math.abs(src[s]) < thr) s++;
+    while (e > s && Math.abs(src[e]) < thr) e--;
+    s = Math.max(0, s - Math.floor(rate * 0.01));
+    e = Math.min(n - 1, e + Math.floor(rate * 0.02));
+    var len = Math.min(e - s + 1, Math.floor(rate * 0.6));
+    if (len < Math.floor(rate * 0.03)) return null;
+    var out = new Float32Array(len), k = 0.9 / peak;
+    for (i = 0; i < len; i++) out[i] = src[s + i] * k;
+    return { ch: '', data: out, rate: rate };
+  }
+  function importAudio(ch, arrayBuf) {
+    return decodeAudio(arrayBuf).then(function (ab) {
+      var rec = processBuffer(ab);
+      if (!rec) { say('几乎没录到声音，请靠近麦克风再试一次。'); return; }
+      rec.ch = ch;
+      S.samples[ch] = rec; delete S.bufs[ch];
+      refreshRec();
+      return idbPut({ ch: ch, data: rec.data, rate: rec.rate }).then(function () {
+        say('已保存“' + ch + '”的录音。');
+      }, function () {
+        say('“' + ch + '”的录音可以用，但浏览器不让保存，刷新后会丢失。');
+      });
+    }, function () { say('音频解码失败，换一个文件或重新录一次。'); });
+  }
+  function recordChar(ch) {
+    if (S.recBusy) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+      say('这个浏览器不能录音，请改用“上传音频”。'); return;
+    }
+    try { ensureCtx(); } catch (e) { say('这个浏览器不能处理音频。'); return; }
+    stopAll();
+    S.recBusy = true; refreshRec();
+    function done() { S.recBusy = false; refreshRec(); }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      var chunks = [], mr;
+      function release() { try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) { /* 忽略 */ } }
+      try { mr = new MediaRecorder(stream); } catch (e) { release(); say('无法开始录音。'); done(); return; }
+      mr.ondataavailable = function (ev) { if (ev.data && ev.data.size) chunks.push(ev.data); };
+      mr.onerror = function () { release(); say('录音出错了。'); done(); };
+      mr.onstop = function () {
+        release();
+        var blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
+        blob.arrayBuffer().then(function (ab) { return importAudio(ch, ab); })
+          .catch(function () { say('录音处理失败。'); })
+          .then(done);
+      };
+      try { mr.start(); } catch (e) { release(); say('无法开始录音。'); done(); return; }
+      say('录音中……请说“' + ch + '”。');
+      setTimeout(function () { try { if (mr.state !== 'inactive') mr.stop(); } catch (e) { /* 忽略 */ } }, 1200);
+    }, function () {
+      say('无法使用麦克风（可能被拒绝了），可以改用“上传音频”。');
+      done();
+    });
+  }
+  function uploadChar(ch, file) {
+    if (!file) return;
+    try { ensureCtx(); } catch (e) { say('这个浏览器不能处理音频。'); return; }
+    file.arrayBuffer().then(function (ab) { return importAudio(ch, ab); })
+      .catch(function () { say('读取文件失败。'); });
+  }
+  function removeChar(ch) {
+    delete S.samples[ch]; delete S.bufs[ch];
+    refreshRec();
+    idbDelete(ch).then(function () { say('已删除“' + ch + '”的录音，改回合成器。'); },
+      function () { say('已改回合成器，但浏览器存储没能同步删除。'); });
+  }
+  function resetAll() {
+    S.samples = {}; S.bufs = {};
+    refreshRec();
+    idbClear().then(function () { say('全部恢复为合成器。'); },
+      function () { say('已恢复合成器，但浏览器存储没能清除。'); });
+  }
+
+  var recUI = {};
+  function buildRec() {
+    var box = $('recRows');
+    CHARS.forEach(function (ch) {
+      var row = el('div', 'recrow');
+      var st = el('span', 'st', '');
+      var bRec = el('button', null, '录音'), bUp = el('button', null, '上传音频');
+      var bPlay = el('button', null, '试听'), bDel = el('button', null, '删除');
+      [bRec, bUp, bPlay, bDel].forEach(function (b) { b.type = 'button'; });
+      var file = document.createElement('input');
+      file.type = 'file'; file.accept = 'audio/*'; file.className = 'hidden';
+      file.setAttribute('aria-label', '上传“' + ch + '”的音频文件');
+      bRec.addEventListener('click', function () { recordChar(ch); });
+      bUp.addEventListener('click', function () { file.click(); });
+      file.addEventListener('change', function () { uploadChar(ch, file.files && file.files[0]); file.value = ''; });
+      bPlay.addEventListener('click', function () { playOne(ch, 1, null, null); });
+      bDel.addEventListener('click', function () { removeChar(ch); });
+      row.appendChild(el('span', 'c', ch));
+      row.appendChild(st);
+      [bRec, bUp, bPlay, bDel, file].forEach(function (x) { row.appendChild(x); });
+      box.appendChild(row);
+      recUI[ch] = { st: st, rec: bRec, del: bDel };
+    });
+  }
+  function refreshRec() {
+    CHARS.forEach(function (ch) {
+      var u = recUI[ch], s = S.samples[ch];
+      u.st.textContent = s ? '已录音（' + (s.data.length / s.rate).toFixed(2) + ' 秒）' : '合成器';
+      u.del.disabled = !s;
+      u.rec.disabled = S.recBusy;
+      u.rec.textContent = S.recBusy ? '请稍候' : '录音';
+    });
+  }
+
+  // ================= 说明区 =================
+  function buildHelp() {
+    var chars = [
+      ['嗯', '起头字，鼻音哼声'], ['咦', '起头字，尖尖的“i”'], ['哇', '起头字，从“u”滑到“a”'],
+      ['呐', '收尾字，带点鼻音的“a”'], ['哒', '收尾字，只放在词尾，带爆破']
+    ];
+    var hc = $('helpChars');
+    chars.forEach(function (c) {
+      var b = el('button', null, c[0]); b.type = 'button';
+      b.appendChild(el('small', null, c[1]));
+      b.addEventListener('click', function () { playOne(c[0], 1, null, null); });
+      hc.appendChild(b);
+    });
+    var tones = [[1, '一声 高平'], [2, '二声 上扬'], [3, '三声 先降后升'], [4, '四声 下降'], [0, '轻声 短促']];
+    var ht = $('helpTones');
+    tones.forEach(function (t) {
+      var b = el('button', null, '呐' + B.TONE_CH[t[0]]); b.type = 'button';
+      b.appendChild(el('small', null, t[1]));
+      b.addEventListener('click', function () { playOne('呐', t[0], null, null); });
+      ht.appendChild(b);
+    });
+  }
+
+  // ================= 初始化 =================
+  function init() {
+    PRESET_ORDER.forEach(function (k) {
+      var o = el('option', null, PRESETS[k].label);
+      o.value = k;
+      els.preset.appendChild(o);
+    });
+    loadSettings(); syncSliders();
+    buildHelp(); buildRec(); refreshRec();
+    els.preset.addEventListener('change', function () {
+      if (PRESETS[els.preset.value]) S.presetName = els.preset.value;
+      syncSliders(); saveSettings();
+    });
+    els.paren.addEventListener('change', function () {
+      S.paren = !!els.paren.checked; saveSettings();
+      if (els.human.value) onHuman();
+    });
+    els.human.addEventListener('input', onHuman);
+    els.bang.addEventListener('input', onBang);
+    $('humanCopy').addEventListener('click', function () { copyText(els.human); });
+    $('bangCopy').addEventListener('click', function () { copyText(els.bang); });
+    $('humanClear').addEventListener('click', function () { els.human.value = ''; onHuman(); });
+    $('bangClear').addEventListener('click', function () { els.bang.value = ''; onBang(); });
+    $('play').addEventListener('click', speak);
+    $('stop').addEventListener('click', stopAll);
+    $('recReset').addEventListener('click', resetAll);
+    els.pitch.addEventListener('input', function () {
+      S.pitchMul = clamp(parseFloat(els.pitch.value) || 1, 0.7, 1.4); syncSliders(); saveSettings();
+    });
+    els.speed.addEventListener('input', function () {
+      S.speed = clamp(parseFloat(els.speed.value) || 1, 0.6, 1.6); syncSliders(); saveSettings();
+    });
+    renderStrip(els.bang.value);
+    idbAll().then(function (list) {
+      (list || []).forEach(function (r) {
+        if (r && r.data && r.rate && CHARS.indexOf(r.ch) >= 0) S.samples[r.ch] = { ch: r.ch, data: r.data, rate: r.rate };
+      });
+      refreshRec();
+    }, function () {
+      say('这个浏览器不让保存录音，录音功能仍可用，但刷新后会丢失。');
+    });
+  }
+  init();
+})();
+</script>
+</body>
+</html>
